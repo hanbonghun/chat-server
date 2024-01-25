@@ -1,8 +1,8 @@
 package com.example.chatbh.chatroom.service
 
 import com.example.chatbh.chatroom.ChatRoom
-import org.apache.commons.logging.LogFactory
 import org.springframework.stereotype.Service
+import reactor.core.publisher.Mono
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -10,19 +10,17 @@ import java.util.concurrent.ConcurrentHashMap
 class ChatRoomService {
     private val chatRooms: MutableMap<String, ChatRoom> = ConcurrentHashMap()
 
-    fun createOrGetChatRoom(participants: Set<String>): ChatRoom {
-        val chatRoomId = if (participants.size == 2) {
-            // 1:1 채팅방 ID 생성 로직
-            generateOneToOneChatRoomId(participants)
-        } else {
-            // 단체 채팅방의 경우, 고유한 ID 생성
-            UUID.randomUUID().toString()
-        }
-
-        println("chatRoomId : ${chatRoomId}" )
-
-        return chatRooms.getOrPut(chatRoomId) {
-            ChatRoom(chatRoomId, participants)
+    fun createOrGetChatRoom(participants: Set<String>): Mono<ChatRoom> {
+        return Mono.fromCallable {
+            val chatRoomId = if (participants.size == 2) {
+                // 1:1 채팅방 ID 생성 로직
+                generateOneToOneChatRoomId(participants)
+            } else {
+                // 단체 채팅방의 경우, 고유한 ID 생성
+                UUID.randomUUID().toString()
+            }
+            println("chatRoomId : ${chatRoomId}")
+            chatRooms.getOrPut(chatRoomId) { ChatRoom(chatRoomId, participants) }
         }
     }
 
@@ -31,7 +29,7 @@ class ChatRoomService {
         return participants.sorted().joinToString("_")
     }
 
-    fun findChatRoom(chatRoomId: String): ChatRoom? {
-        return chatRooms[chatRoomId]
+    fun findChatRoom(chatRoomId: String): Mono<ChatRoom> {
+        return Mono.justOrEmpty(chatRooms[chatRoomId])
     }
 }

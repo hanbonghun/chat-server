@@ -10,7 +10,9 @@ import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAd
 import org.springframework.web.reactive.socket.server.upgrade.ReactorNettyRequestUpgradeStrategy
 
 @Configuration
-class WebSocketConfig(private val reactiveWebSocketHandler: ReactiveWebSocketHandler) {
+class WebSocketConfig(
+    private val reactiveWebSocketHandler: ReactiveWebSocketHandler
+) {
 
     @Bean
     fun handlerMapping(): HandlerMapping {
