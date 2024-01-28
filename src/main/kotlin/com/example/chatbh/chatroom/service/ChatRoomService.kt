@@ -1,35 +1,37 @@
 package com.example.chatbh.chatroom.service
 
 import com.example.chatbh.chatroom.ChatRoom
+import com.example.chatbh.chatroom.repository.ChatRoomRepository
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
+import reactor.kotlin.core.publisher.toMono
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 @Service
-class ChatRoomService {
-    private val chatRooms: MutableMap<String, ChatRoom> = ConcurrentHashMap()
-
-    fun createOrGetChatRoom(participants: Set<String>): Mono<ChatRoom> {
-        return Mono.fromCallable {
-            val chatRoomId = if (participants.size == 2) {
-                // 1:1 채팅방 ID 생성 로직
-                generateOneToOneChatRoomId(participants)
-            } else {
-                // 단체 채팅방의 경우, 고유한 ID 생성
-                UUID.randomUUID().toString()
-            }
-            println("chatRoomId : ${chatRoomId}")
-            chatRooms.getOrPut(chatRoomId) { ChatRoom(chatRoomId, participants) }
+class ChatRoomService(
+    private val chatRoomRepository: ChatRoomRepository,
+) {
+    fun createChatRoom(participants: Set<String>): Mono<ChatRoom> {
+        val chatRoomId = if (participants.size == 2) {
+            generateOneToOneChatRoomId(participants)
+        } else {
+            UUID.randomUUID().toString()
         }
+
+        val chatRoom = ChatRoom(chatRoomId, participants)
+        return chatRoomRepository.save(chatRoom).toMono()
     }
 
-    private fun generateOneToOneChatRoomId(participants: Set<String>): String {
-        // 알파벳 순서대로 정렬하여 ID 생성
+    fun generateOneToOneChatRoomId(participants: Set<String>): String {
         return participants.sorted().joinToString("_")
     }
 
-    fun findChatRoom(chatRoomId: String): Mono<ChatRoom> {
-        return Mono.justOrEmpty(chatRooms[chatRoomId])
+    fun getChatRoomById(chatRoomId: String): Mono<ChatRoom> {
+        return chatRoomRepository.findById(chatRoomId)
+    }
+
+    // 내가 참여한 채팅방 목록 조회
+    fun getMyChatRooms(username: String): Mono<List<ChatRoom>> {
+        return chatRoomRepository.findByParticipantsContains(username).collectList()
     }
 }
