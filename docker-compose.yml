@@ -8,13 +8,17 @@ services:
     volumes:
       - redis-data:/data
 
-#  r2db:
-#    image: redislabs/redisearch:latest
-#    container_name: r2db
-#    ports:
-#      - "6380:6380"
-#    volumes:
-#      - ./data:/data
+  mongodb:
+    container_name: chat-bh-mongodb
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
 
 volumes:
   redis-data:
+  mongodb-data:

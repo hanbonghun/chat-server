@@ -6,7 +6,8 @@ import org.springframework.stereotype.Service
 @Service
 class RedisMessagePublisher(private val reactiveRedisTemplate: ReactiveRedisTemplate<String, String>) {
 
-    fun publish(message: String) {
-        reactiveRedisTemplate.convertAndSend("chatTopic", message).subscribe()
+    fun publishToChatRoom(chatRoomId: String, message: String) {
+        val chatRoomTopic = "chatRoom:$chatRoomId"
+        reactiveRedisTemplate.convertAndSend(chatRoomTopic, message).subscribe()
     }
 }

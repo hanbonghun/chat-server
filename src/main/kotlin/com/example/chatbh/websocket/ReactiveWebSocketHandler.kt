@@ -1,61 +1,76 @@
 package com.example.chatbh.websocket
 
-import com.example.chatbh.RedisMessagePublisher
-import com.example.chatbh.RedisMessageSubscriber
-import com.example.chatbh.chatroom.ChatRoom
-import com.example.chatbh.chatroom.service.ChatRoomService
+import com.example.chatbh.websocket.service.WebSocketSessionManager
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.socket.WebSocketHandler
 import org.springframework.web.reactive.socket.WebSocketSession
+import org.springframework.web.util.UriComponentsBuilder
+import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 
 @Component
 class ReactiveWebSocketHandler(
-    private val messagePublisher: RedisMessagePublisher,
-    private val messageSubscriber: RedisMessageSubscriber,
-    private val chatRoomService: ChatRoomService
+    private val sessionManager: WebSocketSessionManager,
 ) : WebSocketHandler {
-
     private val objectMapper = jacksonObjectMapper()
 
     override fun handle(session: WebSocketSession): Mono<Void> {
-        val inputMessages = session.receive()
-            .map { it.payloadAsText }
-            .flatMap { message ->
-                val messageData = parseMessage(message)
-                if (messageData.command == "send") {
-                    handleSendMessageCommand(messageData)
-                } else {
-                    Mono.error(IllegalArgumentException("Unknown or unsupported command"))
-                }
-            }
+        val username = getUsernameFromSession(session)
+        println("Connected user: $username")
+
+        // 세션 등록
+        username?.let { sessionManager.registerSession(session.id, it, session) }
+
+        val outputMessages = session.receive()
+            .map { msg -> handleMessage(msg.payloadAsText, session) }
             .then()
 
-        val outputMessages = messageSubscriber.getMessages()
-            .map { session.textMessage(it) }
-
-        return session.send(outputMessages).and(inputMessages)
-    }
-
-    private fun handleMessage(message: String, chatRoom: ChatRoom) {
-        chatRoom.participants.forEach { userId ->
-            // 메시지를 Redis를 통해 해당 채팅방의 모든 참가자에게 발행
-            messagePublisher.publish(objectMapper.writeValueAsString(message))
+        return outputMessages.doFinally {
+            // 세션 해제
+            sessionManager.removeSession(session.id)
         }
     }
 
-    private fun parseMessage(message: String): ChatMessage {
-        return objectMapper.readValue(message,  ChatMessage::class.java)
+    private fun getUsernameFromSession(session: WebSocketSession): String? {
+        val uri = session.handshakeInfo.uri.toString()
+        val uriComponents = UriComponentsBuilder.fromUriString(uri).build()
+        return uriComponents.queryParams.getFirst("username")
     }
 
-    private fun handleSendMessageCommand(message: ChatMessage): Mono<Void> {
-        return chatRoomService.findChatRoom(message.chatRoomId)
-            .flatMap { chatRoom ->
-                handleMessage(message.content, chatRoom)
-                Mono.empty<Void>()
+    private fun handleMessage(messageText: String, session: WebSocketSession): Mono<Void> {
+        return try {
+            val message = objectMapper.readValue(messageText, ChatMessage::class.java)
+            when (message.command) {
+                "join", "create" -> handleJoinOrCreateChatRoom(message, session)
+                "send" -> broadcastMessage(message)
+                else -> Mono.empty()
             }
-            .switchIfEmpty(Mono.error(IllegalStateException("Chat room not found")))
+        } catch (e: Exception) {
+            println("Error parsing message: $messageText")
+            Mono.empty<Void>()
+        }
+    }
+
+    private fun handleJoinOrCreateChatRoom(message: ChatMessage, session: WebSocketSession): Mono<Void> {
+        sessionManager.addUserToChatRoom(message.sender, message.chatRoomId)
+        return Mono.empty<Void>()
+    }
+
+    // TODO: blocking 되는 부분 수정 필요
+    private fun broadcastMessage(message: ChatMessage): Mono<Void> {
+        val sessions = sessionManager.getSessionsForChatRoom(message.chatRoomId)
+        val broadcast = Flux.fromIterable(sessions)
+            .flatMap { sessionToSend ->
+                if (sessionToSend != null) {
+                    sessionToSend.send(Mono.just(sessionToSend.textMessage(objectMapper.writeValueAsString(message))))
+                } else {
+                    println("메세지를 받을 세션이 존재하지 않습니다.")
+                    Mono.empty<Void>()
+                }
+            }.subscribe()
+
+        return Mono.empty()
     }
 }
 
@@ -64,5 +79,5 @@ data class ChatMessage(
     val content: String,
     val sender: String,
     val chatRoomId: String,
-    val participants: Set<String> // 채팅방에 참여할 사용자들의 목록
+    val participants: Set<String>,
 )
