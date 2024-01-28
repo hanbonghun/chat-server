@@ -1,1 +1,9 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://root:example@localhost:27017/chat-bh?authSource=admin
+      database: chat-bh
 
+    redis:
+      host: localhost
+      port: 6379
