@@ -17,11 +17,11 @@ import reactor.core.publisher.Mono
 @RequestMapping("/api/chatrooms")
 class ChatController(private val chatRoomService: ChatRoomService) {
 
-    data class ChatRoomRequest(val participants: Set<String>)
+    data class ChatRoomRequest(val name: String ,val participants: Set<String>)
 
     @PostMapping
     fun createChatRoom(@RequestBody request: ChatRoomRequest): Mono<ResponseEntity<ChatRoom>> {
-        return chatRoomService.createChatRoom(request.participants)
+        return chatRoomService.createChatRoom(request.name, request.participants)
             .map { chatRoom -> ResponseEntity.ok(chatRoom) }
     }
 
