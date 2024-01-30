@@ -28,7 +28,7 @@ class ReactiveWebSocketHandler(
 
         // 세션 등록
         userId?.let {
-            sessionManager.registerSession(session.id, it, session)
+            sessionManager.registerSession(session.id, session)
             userSessionService.mapSessionToUser(session.id, userId)
         }
 
@@ -75,6 +75,7 @@ class ReactiveWebSocketHandler(
     ): Mono<Void> {
         chatRoomService.createChatRoom(payload.name, payload.userIds.toSet())
             .flatMap { chatRoom ->
+                // 채팅방 채널 생성
                 chatRoomChannelService.createChatRoomChannel(chatRoom.id)
             }
             .onErrorResume { e ->
@@ -97,6 +98,8 @@ class ReactiveWebSocketHandler(
         // 세션을 채팅방에 매핑
         chatRoomSessionService.addSessionToChatRoom(session.id, chatRoomId)
         userSessionService.mapSessionToUser(session.id, userId)
+
+        chatRoomChannelService.addChatRoomListener(chatRoomId)
 
         return Mono.empty()
     }
